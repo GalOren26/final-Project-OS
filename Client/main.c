@@ -9,13 +9,16 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment (lib,"Ws3_32.lib")
-#include "SocketShared.h"
+#include "socketShared.h"
 #include "SocketTools.h"
-#include "ThreadFuncs.h"
+#include "clientFunctions.h"
+
 
 
 SOCKET m_socket;
-
+char* client_Messages[] = { "CLIENT_REQUEST","CLIENT_VERSUS","CLIENT_SETUP","CLIENT_PLAYER_MOVE","CLIENT_DISCONNECT"};
+char* server_Messages[] = { "SERVER_MAIN_MENU","SERVER_APPROVED","SERVER_DENIED","SERVER_INVITE","SERVER_SETUP_REQUEST","SERVER_PLAYER_MOVE_REQUEST",
+"SERVER_GAME_RESULTS","SERVER_WIN","SERVER_DRAW","SERVER_NO_OPPONENTS","SERVER_OPPONENT_QUIT"};
 //Reading data coming from the server
 static DWORD RecvDataThread(void)
 {
@@ -47,8 +50,6 @@ static DWORD RecvDataThread(void)
 	return 0;
 }
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
 //Sending data to the server
 static DWORD SendDataThread(void)
 {
@@ -73,9 +74,10 @@ static DWORD SendDataThread(void)
 }
 void mainClient() {
 	SOCKADDR_IN clientService;
-	HANDLE hThread[2];
-	DWORD* p_thread_ids[2];
+	HANDLE hThread[3];
+	DWORD* p_thread_ids[3];
 	int result;
+	int ret_val;
 	// Initialize Winsock.
 	WSADATA wsaData; //Create a WSADATA object called wsaData.
 	//The WSADATA structure contains information about the Windows Sockets implementation.
@@ -100,14 +102,6 @@ void mainClient() {
 	}
 	
 
-
-	////when we finish the app. finished the work with all the threads
-	result = WSAcleanup();
-	if (result != 0) {
-		printf("WSAStartup failed: %d\n", result);
-		return 1;
-	}
-
 	//For a client to communicate on a network, it must connect to a server.
 	// Connect to a server.
 
@@ -116,15 +110,16 @@ void mainClient() {
 	clientService.sin_addr.s_addr = inet_addr(SERVER_ADDRESS_STR); //Setting the IP address to connect to
 	clientService.sin_port = htons(SERVER_PORT); //Setting the port to connect to.
 
-
 	 // Call the connect function, passing the created socket and the sockaddr_in structure as parameters.
 	// Check for general errors.
-	if ( connect( m_socket, (SOCKADDR*) &clientService, sizeof(clientService) ) == SOCKET_ERROR) {
-		printf("Failed connecting to server on %s:%d. Exiting\n", SERVER_ADDRESS_STR, SERVER_PORT);
+	
+	ret_val = connect_to_server(m_socket, &clientService, sizeof(clientService));
+	if (ret_val == SOCKET_ERROR) {
 		WSACleanup();
-		return;
+		return;	
 	}
 	printf("Connected to server on %s:%d. \n", SERVER_ADDRESS_STR, SERVER_PORT);
+
 	//need to wrap in a function:
 	//int createThreadsForClient(HANDLE * hTread, DWORD * p_thread_ids) {
 
@@ -144,7 +139,6 @@ void mainClient() {
 			return;
 		}
 
-
 		hThread[1] = CreateThread(
 			NULL,
 			0,
@@ -160,14 +154,35 @@ void mainClient() {
 			WSACleanup();
 			return;
 		}
-	
-	WaitForMultipleObjects(2, hThread, FALSE, INFINITE);
+		//hThread[2] = CreateThread(
+		//	NULL,
+		//	0,
+		//	user_interface,
+		//	inputmode,
+		//	0,
+		//	NULL
+		//);
 
+		//if (hThread[2] == NULL)
+		//{
+		//	printf("cannot open user interface Thread.\n");
+		//	WSACleanup();
+		//	return;
+		//}
+	
+	WaitForMultipleObjects(3, hThread, FALSE, INFINITE);
+	////when we finish the app. finished the work with all the threads
+	result = WSAcleanup();
+	if (result != 0) {
+		printf("WSAStartup failed: %d\n", result);
+		return -1;
+	}
 	TerminateThread(hThread[0], 0x555);
 	TerminateThread(hThread[1], 0x555);
 
 	CloseHandle(hThread[0]);
 	CloseHandle(hThread[1]);
+	//CloseHandle(hThread[2]);
 
 	closesocket(m_socket);
 
